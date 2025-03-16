@@ -24,6 +24,7 @@ const (
 // Anthropic represents the main client structure.
 type Anthropic struct {
 	client           *anthropicsdk.Client
+	apiKey           string
 	model            Model
 	temperature      float64
 	maxTokens        int
@@ -35,6 +36,28 @@ type Anthropic struct {
 	cache            *cache.Cache
 	responseFormat   *ResponseFormat
 	Name             string
+}
+
+// New creates a new Anthropic instance with API key from environment
+func New() *Anthropic {
+	anthropicKey := os.Getenv("ANTHROPIC_API_KEY")
+
+	return &Anthropic{
+		client:      anthropicsdk.NewClient(option.WithAPIKey(anthropicKey)),
+		model:       ModelClaude3_5SonnetLatest,
+		temperature: DefaultAnthropicTemperature,
+		maxTokens:   DefaultAnthropicMaxTokens,
+		stop:        []string{},
+		functions:   make(map[string]Function),
+		Name:        "anthropic",
+	}
+}
+
+// WithKey returns a new Anthropic instance with the given API key.
+func WithKey(key string) *Anthropic {
+	return &Anthropic{
+		apiKey: key,
+	}
 }
 
 // WithModel sets the model to use for the Anthropic instance.
@@ -104,6 +127,22 @@ func (a *Anthropic) WithResponseFormat(responseFormat ResponseFormat) *Anthropic
 	return a
 }
 
+// WithFunctions implements the LLM interface
+func (a *Anthropic) WithFunctions(functions map[string]Function) *Anthropic {
+	a.functions = functions
+	return a
+}
+
+// GetFunctions implements the LLM interface
+func (a *Anthropic) GetFunctions() map[string]Function {
+	return a.functions
+}
+
+// SetStop sets the stop sequences for the Anthropic instance.
+func (a *Anthropic) SetStop(stop []string) {
+	a.stop = stop
+}
+
 // getCache retrieves a cached response for the given thread if available.
 func (a *Anthropic) getCache(ctx context.Context, t *thread.Thread) (*cache.Result, error) {
 	messages := t.UserQuery()
@@ -158,38 +197,6 @@ func (a *Anthropic) setUsageMetadata(usage types.Meta) {
 	}
 
 	a.usageCallback(callbackMetadata)
-}
-
-// New creates a new Anthropic instance with API key from environment
-func New() *Anthropic {
-	anthropicKey := os.Getenv("ANTHROPIC_API_KEY")
-
-	return &Anthropic{
-		client:      anthropicsdk.NewClient(option.WithAPIKey(anthropicKey)),
-		model:       ModelClaude3_5SonnetLatest,
-		temperature: DefaultAnthropicTemperature,
-		maxTokens:   DefaultAnthropicMaxTokens,
-		stop:        []string{},
-		functions:   make(map[string]Function),
-		Name:        "anthropic",
-	}
-}
-
-// NewAnthropic creates a new Anthropic instance with explicit API key.
-func NewAnthropic(apiKey string) *Anthropic {
-	client := anthropicsdk.NewClient(
-		option.WithAPIKey(apiKey),
-	)
-
-	return &Anthropic{
-		client:      client,
-		model:       ModelClaude3_5SonnetLatest,
-		temperature: DefaultAnthropicTemperature,
-		maxTokens:   DefaultAnthropicMaxTokens,
-		stop:        []string{},
-		functions:   make(map[string]Function),
-		Name:        "anthropic",
-	}
 }
 
 // stream handles streaming responses from the Anthropic API.
@@ -477,25 +484,4 @@ Your response should consist entirely of properly formatted JSON.`),
 	}
 
 	return nil
-}
-
-// Chat implements the LLM interface
-func (a *Anthropic) Chat(ctx context.Context, t *thread.Thread) error {
-	return a.Generate(ctx, t)
-}
-
-// WithFunctions implements the LLM interface
-func (a *Anthropic) WithFunctions(functions map[string]Function) *Anthropic {
-	a.functions = functions
-	return a
-}
-
-// GetFunctions implements the LLM interface
-func (a *Anthropic) GetFunctions() map[string]Function {
-	return a.functions
-}
-
-// SetStop sets the stop sequences for the Anthropic instance.
-func (a *Anthropic) SetStop(stop []string) {
-	a.stop = stop
 }
